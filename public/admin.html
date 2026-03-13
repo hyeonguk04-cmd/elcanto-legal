@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 페이지 - 법령·회계 검색</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+  <!-- 로그인 화면 -->
+  <div id="loginScreen" class="hidden">
+    <div class="min-h-screen flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
+        <div class="flex items-center justify-center gap-3 mb-6">
+          <div class="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+            <i data-lucide="shield" class="w-6 h-6 text-white"></i>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-slate-800">관리자 로그인</h1>
+            <p class="text-sm text-slate-500">사용자 관리 페이지</p>
+          </div>
+        </div>
+
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">이메일</label>
+            <input type="email" id="loginEmail" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">비밀번호</label>
+            <input type="password" id="loginPassword" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" required>
+          </div>
+          <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 px-4 rounded-lg font-medium transition-colors">로그인</button>
+        </form>
+
+        <div id="loginError" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 메인 관리자 화면 -->
+  <div id="adminScreen" class="hidden">
+    <!-- 헤더 -->
+    <div class="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+            <i data-lucide="shield" class="w-5 h-5 text-white"></i>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold text-slate-800">관리자 페이지</h1>
+            <p class="text-xs text-slate-500">사용자 관리 · 승인 · 통계</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="adminName" class="text-sm text-slate-600"></span>
+          <button onclick="logout()" class="text-sm text-purple-600 hover:text-purple-700 font-medium">로그아웃</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+      <!-- 통계 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-slate-600">전체 사용자</span>
+            <i data-lucide="users" class="w-5 h-5 text-slate-400"></i>
+          </div>
+          <div id="totalUsers" class="text-3xl font-bold text-slate-800">0</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-slate-600">대기 중</span>
+            <i data-lucide="clock" class="w-5 h-5 text-amber-500"></i>
+          </div>
+          <div id="pendingUsers" class="text-3xl font-bold text-amber-600">0</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-slate-600">승인됨</span>
+            <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+          </div>
+          <div id="approvedUsers" class="text-3xl font-bold text-green-600">0</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-slate-600">비활성화</span>
+            <i data-lucide="x-circle" class="w-5 h-5 text-red-500"></i>
+          </div>
+          <div id="disabledUsers" class="text-3xl font-bold text-red-600">0</div>
+        </div>
+      </div>
+
+      <!-- 검색 사용량 통계 -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <!-- 총 사용량 -->
+        <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-6 shadow-lg text-white">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <div class="text-sm opacity-90">총 검색 횟수</div>
+              <div id="totalSearches" class="text-4xl font-bold mt-1">0</div>
+            </div>
+            <div class="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+              <i data-lucide="search" class="w-7 h-7"></i>
+            </div>
+          </div>
+          <div class="text-xs opacity-75">전체 기간 누적</div>
+        </div>
+
+        <!-- 분야별 사용량 -->
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+          <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-600"></i>
+            분야별 검색 횟수
+          </h3>
+          <div id="categoryStats" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- 최근 검색 -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+        <div class="p-4 border-b border-slate-100 bg-slate-50">
+          <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+            <i data-lucide="clock" class="w-5 h-5 text-indigo-600"></i>
+            최근 검색 (최근 10개)
+          </h2>
+        </div>
+        <div id="recentSearches" class="divide-y divide-slate-100"></div>
+      </div>
+
+      <!-- 필터 -->
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-4">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium text-slate-600">필터:</span>
+          <button onclick="filterUsers('all')" id="filterAll" class="px-3 py-1 rounded-full text-sm font-medium bg-slate-800 text-white">전체</button>
+          <button onclick="filterUsers('pending')" id="filterPending" class="px-3 py-1 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-100">대기중</button>
+          <button onclick="filterUsers('approved')" id="filterApproved" class="px-3 py-1 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-100">승인됨</button>
+          <button onclick="filterUsers('disabled')" id="filterDisabled" class="px-3 py-1 rounded-full text-sm font-medium text-slate-600 hover:bg-slate-100">비활성화</button>
+        </div>
+      </div>
+
+      <!-- 사용자 목록 -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 border-b border-slate-100 bg-slate-50">
+          <h2 class="font-semibold text-slate-800">사용자 목록</h2>
+        </div>
+        <div id="usersList" class="divide-y divide-slate-100"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>
