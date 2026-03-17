@@ -301,3 +301,6 @@ data: {"type":"done"}
 ---
 
 **Made with ❤️ for Korean Business Professionals** 🇰🇷
+
+---
+마지막 업데이트: 2026-03-17
