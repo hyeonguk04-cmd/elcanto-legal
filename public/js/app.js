@@ -3,52 +3,34 @@ let token = localStorage.getItem('token');
 let currentUser = null;
 let selectedCategory = null;
 
-// 카테고리 데이터
+// 카테고리 데이터 (7개 분야)
 const categories = [
   {
-    id: 'accounting',
-    name: '회계기준',
+    id: 'accounting-tax',
+    name: '회계·세무',
     icon: 'book-open',
     color: 'indigo',
-    desc: 'K-IFRS, 일반기업회계기준',
-    sources: ['한국회계기준원', '금융위원회', '금융감독원', '한국공인회계사회'],
-    examples: ['연구개발비 자산화 요건', '리스부채 재측정', '손상차손 인식']
+    desc: '회계기준 + 세법 통합',
+    sources: ['한국회계기준원', '금융위원회', '금융감독원', '다트', '국세청', '조세심판원', '기획재정부', '홈택스'],
+    examples: ['연구개발비 자산화 요건', '법인세 신고', '손상차손 인식', '접대비 한도 계산', '세금계산서 수정 발급']
   },
   {
-    id: 'tax',
-    name: '세법',
-    icon: 'landmark',
-    color: 'emerald',
-    desc: '법인세, 부가세, 소득세 등',
-    sources: ['국세청', '기획재정부', '조세심판원', '국세법령정보시스템'],
-    examples: ['접대비 한도 계산', '세금계산서 수정 발급', '가산세 감면 요건']
-  },
-  {
-    id: 'customs',
-    name: '관세법',
+    id: 'trade-customs',
+    name: '무역·관세',
     icon: 'ship',
     color: 'blue',
-    desc: '수출입 관세, HS Code, FTA',
-    sources: ['관세청', '관세평가분류원', 'FTA포털', '관세법령정보포털'],
-    examples: ['HS Code 분류 기준', 'FTA 원산지 증명', '관세환급 절차']
+    desc: '무역법 + 관세법 통합',
+    sources: ['관세청', 'FTA포털', '관세평가분류원', '산업통상자원부', '무역협회', 'KOTRA'],
+    examples: ['HS Code 분류 기준', 'FTA 원산지 증명', '관세환급 절차', '수출 승인 절차', '전략물자 해당 여부']
   },
   {
-    id: 'trade',
-    name: '무역법',
-    icon: 'building-2',
-    color: 'amber',
-    desc: '대외무역법, 수출입 규정',
-    sources: ['산업통상자원부', '무역협회', '무역위원회', 'KOTRA'],
-    examples: ['수출 승인 절차', '전략물자 해당 여부', '원산지 표시 방법']
-  },
-  {
-    id: 'finance',
-    name: '금융정보',
+    id: 'finance-treasury',
+    name: '금융·재무',
     icon: 'credit-card',
-    color: 'rose',
-    desc: '환율, 주식, 펀드, ETF',
-    sources: ['한국은행', '금융감독원', '한국거래소', '금융투자협회'],
-    examples: ['환율 변동 영향 회계처리', 'ETF vs 펀드 비교', '법인 예금자보호 한도']
+    color: 'emerald',
+    desc: '금융상품, 환율, 투자',
+    sources: ['한국은행', '금융감독원', '한국거래소', '금융투자협회', '예금보험공사'],
+    examples: ['환율 변동 회계처리', 'ETF vs 펀드 비교', '예금자보호', '보험상품 문의']
   },
   {
     id: 'labor',
@@ -58,6 +40,33 @@ const categories = [
     desc: '근로기준법, 4대보험',
     sources: ['고용노동부', '국민연금공단', '건강보험공단', '근로복지공단'],
     examples: ['연차휴가 산정 방법', '퇴직금 중간정산 요건', '4대보험 취득신고 기한']
+  },
+  {
+    id: 'legal-contract',
+    name: '법률·계약',
+    icon: 'file-text',
+    color: 'amber',
+    desc: '민법, 상법, 계약서',
+    sources: ['법제처', '법무부', '대한변호사협회', '공정거래위원회', '중소벤처기업부', '하도급분쟁조정협의회'],
+    examples: ['계약서 검토 포인트', '하자담보책임', '계약 해지 요건', '하도급대금 지급기한', '부당특약 검토']
+  },
+  {
+    id: 'consumer-cs',
+    name: '소비자·민원',
+    icon: 'message-circle',
+    color: 'rose',
+    desc: '소비자보호, CS대응',
+    sources: ['한국소비자원', '공정거래위원회', '소비자분쟁조정위원회', '전자거래분쟁조정위원회'],
+    examples: ['환불 요구 대응', '상품하자 처리', '민원 답변 가이드', '청약철회 기한']
+  },
+  {
+    id: 'it-system',
+    name: 'IT·시스템',
+    icon: 'monitor',
+    color: 'cyan',
+    desc: 'SAP, ERP, 엑셀 활용',
+    sources: ['SAP 공식문서', 'IT 모범사례', '기술 커뮤니티'],
+    examples: ['SAP 모듈 문의', '엑셀 함수 활용', '인터넷 속도 개선', 'ERP 오류 대응']
   }
 ];
 
@@ -67,7 +76,8 @@ const colorMap = {
   blue: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', btnBg: 'bg-blue-600', btnHover: 'hover:bg-blue-700', light: 'bg-blue-100' },
   amber: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', btnBg: 'bg-amber-600', btnHover: 'hover:bg-amber-700', light: 'bg-amber-100' },
   rose: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', btnBg: 'bg-rose-600', btnHover: 'hover:bg-rose-700', light: 'bg-rose-100' },
-  violet: { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-600', btnBg: 'bg-violet-600', btnHover: 'hover:bg-violet-700', light: 'bg-violet-100' }
+  violet: { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-600', btnBg: 'bg-violet-600', btnHover: 'hover:bg-violet-700', light: 'bg-violet-100' },
+  cyan: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', btnBg: 'bg-cyan-600', btnHover: 'hover:bg-cyan-700', light: 'bg-cyan-100' }
 };
 
 // 초기화
@@ -402,4 +412,3 @@ function addCopyButton() {
   header.appendChild(copyBtn);
   lucide.createIcons();
 }
- 
