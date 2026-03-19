@@ -402,3 +402,4 @@ function addCopyButton() {
   header.appendChild(copyBtn);
   lucide.createIcons();
 }
+ 
