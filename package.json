@@ -1,7 +1,7 @@
 {
   "name": "legal-accounting-search-streaming",
-  "version": "3.0.0",
-  "description": "기업 법령·회계 통합 검색 - 스트리밍 최적화",
+  "version": "3.3.0",
+  "description": "기업 법령·회계 통합 검색 - 7개 분야 (Google Gemini 2.0 Flash 무료 버전)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,7 +14,7 @@
     "express": "^4.18.2",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
-    "@anthropic-ai/sdk": "^0.36.3",
+    "@google/generative-ai": "^0.21.0",
     "dotenv": "^16.4.5",
     "cors": "^2.8.5",
     "pg": "^8.11.3"
