@@ -13,8 +13,18 @@ const adminAuthMiddleware = require('./middleware/adminAuth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Google Gemini SDK 초기화
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Google Gemini SDK 초기화 (안전한 초기화)
+let genAI = null;
+if (process.env.GEMINI_API_KEY) {
+  try {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    console.log('✅ Gemini SDK 초기화 성공');
+  } catch (error) {
+    console.error('❌ Gemini SDK 초기화 실패:', error.message);
+  }
+} else {
+  console.warn('⚠️ GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
+}
 
 // 미들웨어
 app.use(cors());
@@ -283,11 +293,21 @@ app.post('/api/search', authMiddleware, async (req, res) => {
 
     console.log(`🔍 검색 요청 - 사용자: ${userId}, 카테고리: ${category}, 질문: ${query}`);
 
+    // Gemini API 키 확인
+    if (!genAI) {
+      console.error('❌ Gemini API가 초기화되지 않았습니다.');
+      return res.status(503).json({ 
+        error: 'AI 서비스가 일시적으로 사용 불가합니다. 관리자에게 문의하세요.',
+        details: 'GEMINI_API_KEY가 설정되지 않았습니다.'
+      });
+    }
+
     // 사용자 상태 확인
     const user = await db.getUserById(userId);
     if (user.status !== 'approved') {
       return res.status(403).json({ error: '승인된 사용자만 검색할 수 있습니다.' });
     }
+
 
     // SSE 헤더 설정
     res.setHeader('Content-Type', 'text/event-stream');
