@@ -132,17 +132,22 @@ async function createAdminUser(email, password) {
 }
 
 // 검색 로그 저장
-async function logSearch(userId, category, query) {
-  const id = Date.now().toString();
-  
-  const result = await pool.query(
-    `INSERT INTO search_logs (id, user_id, category, query, timestamp)
-     VALUES ($1, $2, $3, $4, NOW())
-     RETURNING *`,
-    [id, userId, category, query]
-  );
-
-  return result.rows[0];
+async function logSearch(data) {
+  try {
+    const { user_id, category, query } = data;  // 이 줄 수정!
+    const id = Date.now().toString();
+    
+    await pool.query(
+      `INSERT INTO search_logs (id, user_id, category, query, timestamp)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+      [id, user_id, category, query]
+    );
+    
+    return { id, user_id, category, query };
+  } catch (error) {
+    console.error('검색 로그 저장 오류:', error);
+    throw error;
+  }
 }
 
 // 검색 통계 조회
@@ -193,8 +198,8 @@ async function getSearchStats() {
 module.exports = {
   initDatabase,
   createUser,
-  findUserByEmail,
-  findUserById,
+  getUserByEmail: findUserByEmail,  // 이 줄 수정!
+  getUserById: findUserById,        // 이 줄 수정!
   getAllUsers,
   updateUserStatus,
   deleteUser,
