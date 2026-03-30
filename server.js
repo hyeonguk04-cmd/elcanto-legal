@@ -308,7 +308,6 @@ app.post('/api/search', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: '승인된 사용자만 검색할 수 있습니다.' });
     }
 
-
     // SSE 헤더 설정
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -324,18 +323,21 @@ app.post('/api/search', authMiddleware, async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'status', message: '🔍 관련 법령 및 자료 검색 중...' })}\n\n`);
 
     try {
-      // Gemini 모델 초기화 (웹 검색 활성화)
+      // Gemini 3.1 Flash Lite Preview (최신 모델)
+      console.log('📤 Gemini 3.1 Flash Lite Preview 초기화 (Code Execution 활성화)...');
+      
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.0-flash-exp',
-        tools: [{
-          googleSearchRetrieval: {
-            dynamicRetrievalConfig: {
-              mode: 'MODE_DYNAMIC',
-              dynamicThreshold: 0.7
-            }
-          }
-        }]
+        model: 'gemini-3.1-flash-lite-preview',
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192,
+        },
+        tools: [{ codeExecution: {} }]
       });
+
+      console.log('✅ 모델 초기화 완료 (gemini-3.1-flash-lite-preview + Code Execution)');
 
       // 스트리밍 응답 생성
       const result = await model.generateContentStream(fullPrompt);
@@ -363,15 +365,35 @@ app.post('/api/search', authMiddleware, async (req, res) => {
       console.log('✅ 검색 완료 및 저장 성공');
 
     } catch (streamError) {
-      console.error('❌ Gemini 스트리밍 오류:', streamError);
-      res.write(`data: ${JSON.stringify({ type: 'error', message: '검색 중 오류가 발생했습니다.' })}\n\n`);
+      console.error('❌ Gemini 스트리밍 오류 (상세):', {
+        name: streamError.name,
+        message: streamError.message,
+        stack: streamError.stack,
+        code: streamError.code,
+        status: streamError.status
+      });
+      res.write(`data: ${JSON.stringify({ 
+        type: 'error', 
+        message: '검색 중 오류가 발생했습니다.',
+        details: streamError.message 
+      })}\n\n`);
       res.end();
     }
 
   } catch (error) {
-    console.error('❌ 검색 API 오류:', error);
+    console.error('❌ 검색 API 오류 (상세):', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      userId: req.user?.id,
+      query: req.body?.query,
+      category: req.body?.category
+    });
     if (!res.headersSent) {
-      res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+      res.status(500).json({ 
+        error: '서버 오류가 발생했습니다.',
+        details: error.message 
+      });
     }
   }
 });
@@ -469,7 +491,8 @@ app.get('/api/admin/stats', authMiddleware, adminAuthMiddleware, async (req, res
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok',
-    version: '3.2.0-7categories-gemini',
+    version: '3.4.0-gemini-3.1-flash-lite',
+    model: 'gemini-3.1-flash-lite-preview',
     timestamp: new Date().toISOString(),
     categories: 7,
     gemini: process.env.GEMINI_API_KEY ? '✓ Configured' : '✗ Not configured',
