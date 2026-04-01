@@ -26,6 +26,23 @@ async function initDatabase() {
       )
     `);
 
+    // 마이그레이션: password 컬럼이 있으면 password_hash로 변경
+    try {
+      const columns = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'password'
+      `);
+      
+      if (columns.rows.length > 0) {
+        console.log('🔄 password 컬럼을 password_hash로 마이그레이션 중...');
+        await pool.query(`ALTER TABLE users RENAME COLUMN password TO password_hash`);
+        console.log('✅ 마이그레이션 완료');
+      }
+    } catch (migrationError) {
+      console.log('ℹ️ 마이그레이션 불필요 또는 이미 완료됨');
+    }
+
     // search_logs 테이블 생성
     await pool.query(`
       CREATE TABLE IF NOT EXISTS search_logs (
@@ -46,10 +63,8 @@ async function initDatabase() {
 }
 
 // 사용자 생성
-async function createUser(userData) {
+async function createUser(name, email, password) {
   try {
-    const { name, email, password } = userData;
-    
     // 중복 이메일 확인
     const existingUser = await pool.query(
       'SELECT * FROM users WHERE email = $1',
@@ -60,8 +75,7 @@ async function createUser(userData) {
       throw new Error('이미 존재하는 이메일입니다.');
     }
 
-    // 비밀번호 해시
-    const passwordHash = await bcrypt.hash(password, 12);
+    // password는 이미 server.js에서 해싱됨
     const id = Date.now().toString();
 
     // 사용자 생성
@@ -69,7 +83,7 @@ async function createUser(userData) {
       `INSERT INTO users (id, name, email, password_hash, status, is_admin, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id, name, email, status, is_admin, created_at, updated_at`,
-      [id, name, email, passwordHash, 'pending', false]
+      [id, name, email, password, 'pending', false]
     );
 
     return result.rows[0];
@@ -83,7 +97,7 @@ async function createUser(userData) {
 async function findUserByEmail(email) {
   try {
     const result = await pool.query(
-      'SELECT id, name, email, password_hash as password, status, is_admin, created_at, updated_at FROM users WHERE email = $1',
+      'SELECT * FROM users WHERE email = $1',
       [email]
     );
     return result.rows[0];
@@ -97,7 +111,7 @@ async function findUserByEmail(email) {
 async function findUserById(id) {
   try {
     const result = await pool.query(
-      'SELECT id, name, email, password_hash as password, status, is_admin, created_at, updated_at FROM users WHERE id = $1',
+      'SELECT * FROM users WHERE id = $1',
       [id]
     );
     return result.rows[0];
@@ -266,8 +280,8 @@ async function getSearchStats() {
 module.exports = {
   initDatabase,
   createUser,
-  getUserByEmail: findUserByEmail,
-  getUserById: findUserById,
+  getUserByEmail: findUserByEmail,  // 별칭 추가
+  getUserById: findUserById,        // 별칭 추가
   getAllUsers,
   updateUserStatus,
   deleteUser,
