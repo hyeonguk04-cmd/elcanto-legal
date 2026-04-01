@@ -323,11 +323,11 @@ app.post('/api/search', authMiddleware, async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'status', message: '🔍 관련 법령 및 자료 검색 중...' })}\n\n`);
 
     try {
-      // Gemini 3 Flash Preview (최신 데이터 - 2026년 2월)
-      console.log('📤 Gemini 3 Flash Preview 초기화 (최신 모델)...');
+      // Gemini 3 Flash (최신 모델)
+      console.log('📤 Gemini 3 Flash 초기화...');
       
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-flash',
         generationConfig: {
           temperature: 0.7,
           topK: 40,
@@ -336,7 +336,7 @@ app.post('/api/search', authMiddleware, async (req, res) => {
         }
       });
 
-      console.log('✅ 모델 초기화 완료 (gemini-3-flash-preview)');
+      console.log('✅ 모델 초기화 완료 (gemini-3-flash)');
 
       // 스트리밍 응답 생성
       const result = await model.generateContentStream(fullPrompt);
@@ -491,7 +491,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok',
     version: '3.4.1',
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-flash',
     timestamp: new Date().toISOString(),
     categories: 7,
     gemini: process.env.GEMINI_API_KEY ? '✓ Configured' : '✗ Not configured',
