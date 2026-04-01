@@ -196,7 +196,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const user = await db.createUser({ name, email, password: hashedPassword });
+    const user = await db.createUser(name, email, hashedPassword);
 
     res.status(201).json({ 
       message: '회원가입이 완료되었습니다. 관리자 승인 후 사용 가능합니다.',
@@ -229,7 +229,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     console.log('🔍 비밀번호 검증 시작...');
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
     console.log('🔍 비밀번호 검증 결과:', isValidPassword);
     
     if (!isValidPassword) {
@@ -274,7 +274,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
     }
     
-    const { password, ...userWithoutPassword } = user;
+    const { password_hash, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
   } catch (error) {
     console.error('사용자 정보 조회 오류:', error);
@@ -406,7 +406,7 @@ app.get('/api/admin/users', authMiddleware, adminAuthMiddleware, async (req, res
   try {
     const users = await db.getAllUsers();
     res.json(users.map(user => {
-      const { password, ...userWithoutPassword } = user;
+      const { password_hash, ...userWithoutPassword } = user;
       return userWithoutPassword;
     }));
   } catch (error) {
