@@ -357,17 +357,46 @@ function handlePaste(event) {
   }
 }
 
-// 이미지를 Base64로 변환
+// 이미지를 Base64로 변환 (압축 포함)
 function convertImageToBase64(file) {
   const reader = new FileReader();
   reader.onload = function(e) {
-    const base64Data = e.target.result;
-    uploadedImages.push({
-      name: file.name,
-      data: base64Data,
-      mimeType: file.type
-    });
-    updateImagePreview();
+    const img = new Image();
+    img.onload = function() {
+      // 캔버스로 이미지 압축
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      // 최대 크기 제한 (1920px)
+      const maxSize = 1920;
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          height = (height / width) * maxSize;
+          width = maxSize;
+        } else {
+          width = (width / height) * maxSize;
+          height = maxSize;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // JPEG로 변환 (품질 0.8)
+      const compressedData = canvas.toDataURL('image/jpeg', 0.8);
+      
+      uploadedImages.push({
+        name: file.name || 'pasted-image.jpg',
+        data: compressedData,
+        mimeType: 'image/jpeg'
+      });
+      updateImagePreview();
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
