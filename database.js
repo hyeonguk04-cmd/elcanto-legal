@@ -277,6 +277,142 @@ async function getSearchStats() {
   }
 }
 
+// 상세 통계 조회 (사용자별, 일별, 기간별)
+async function getDetailedStats(startDate = null, endDate = null) {
+  try {
+    const now = new Date();
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // 기본 날짜 범위: 이번 달
+    const start = startDate ? new Date(startDate) : currentMonth;
+    const end = endDate ? new Date(endDate) : now;
+
+    // 1. 총 사용량 (전체 & 기간별)
+    const totalAllTime = await pool.query('SELECT COUNT(*) as count FROM search_logs');
+    const totalPeriod = await pool.query(
+      'SELECT COUNT(*) as count FROM search_logs WHERE timestamp >= $1 AND timestamp <= $2',
+      [start, end]
+    );
+
+    // 2. 이번 달 사용량
+    const monthlyUsage = await pool.query(
+      'SELECT COUNT(*) as count FROM search_logs WHERE timestamp >= $1',
+      [currentMonth]
+    );
+
+    // 3. 사용자별 통계
+    const userStats = await pool.query(`
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        COUNT(sl.id) as search_count,
+        MAX(sl.timestamp) as last_search
+      FROM users u
+      LEFT JOIN search_logs sl ON u.id = sl.user_id
+      WHERE u.is_admin = false
+      GROUP BY u.id, u.name, u.email
+      ORDER BY search_count DESC
+    `);
+
+    // 4. 분야별 통계 (기간별)
+    const categoryStats = await pool.query(`
+      SELECT category, COUNT(*) as count
+      FROM search_logs
+      WHERE timestamp >= $1 AND timestamp <= $2
+      GROUP BY category
+      ORDER BY count DESC
+    `, [start, end]);
+
+    // 5. 일별 통계 (최근 30일)
+    const dailyStats = await pool.query(`
+      SELECT 
+        DATE(timestamp) as date,
+        COUNT(*) as count
+      FROM search_logs
+      WHERE timestamp >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE(timestamp)
+      ORDER BY date DESC
+    `);
+
+    // 6. 주간 통계
+    const weeklyStats = await pool.query(`
+      SELECT 
+        DATE_TRUNC('week', timestamp) as week,
+        COUNT(*) as count
+      FROM search_logs
+      WHERE timestamp >= NOW() - INTERVAL '12 weeks'
+      GROUP BY DATE_TRUNC('week', timestamp)
+      ORDER BY week DESC
+    `);
+
+    // 7. API 한도 분석
+    const monthlyCount = parseInt(monthlyUsage.rows[0].count);
+    const freeLimit = 15000;
+    const usagePercent = ((monthlyCount / freeLimit) * 100).toFixed(2);
+    const remainingQuota = freeLimit - monthlyCount;
+    
+    // 일평균 사용량 계산
+    const daysInMonth = now.getDate();
+    const avgPerDay = daysInMonth > 0 ? Math.round(monthlyCount / daysInMonth) : 0;
+    
+    // 예상 월말 사용량
+    const daysLeftInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - daysInMonth;
+    const projectedMonthEnd = monthlyCount + (avgPerDay * daysLeftInMonth);
+    
+    // 유료 전환 예상일 (15,000회 도달 예상)
+    const daysToLimit = remainingQuota > 0 && avgPerDay > 0 
+      ? Math.ceil(remainingQuota / avgPerDay) 
+      : null;
+    const upgradePrediction = daysToLimit 
+      ? new Date(now.getTime() + (daysToLimit * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
+      : null;
+
+    return {
+      summary: {
+        totalAllTime: parseInt(totalAllTime.rows[0].count),
+        totalPeriod: parseInt(totalPeriod.rows[0].count),
+        monthlyUsage: monthlyCount,
+        dailyAverage: avgPerDay,
+        periodStart: start.toISOString().split('T')[0],
+        periodEnd: end.toISOString().split('T')[0]
+      },
+      apiQuota: {
+        freeLimit: freeLimit,
+        used: monthlyCount,
+        remaining: remainingQuota,
+        usagePercent: parseFloat(usagePercent),
+        projectedMonthEnd: projectedMonthEnd,
+        upgradePrediction: upgradePrediction,
+        status: monthlyCount >= freeLimit ? 'exceeded' : 
+                monthlyCount >= freeLimit * 0.8 ? 'warning' : 'ok'
+      },
+      byUser: userStats.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        searchCount: parseInt(row.search_count),
+        lastSearch: row.last_search
+      })),
+      byCategory: categoryStats.rows.map(row => ({
+        category: row.category,
+        count: parseInt(row.count)
+      })),
+      daily: dailyStats.rows.map(row => ({
+        date: row.date.toISOString().split('T')[0],
+        count: parseInt(row.count)
+      })),
+      weekly: weeklyStats.rows.map(row => ({
+        week: row.week.toISOString().split('T')[0],
+        count: parseInt(row.count)
+      }))
+    };
+  } catch (error) {
+    console.error('상세 통계 조회 오류:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   initDatabase,
   createUser,
@@ -287,5 +423,6 @@ module.exports = {
   deleteUser,
   createAdminUser,
   logSearch,
-  getSearchStats
+  getSearchStats,
+  getDetailedStats
 };

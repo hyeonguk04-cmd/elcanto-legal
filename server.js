@@ -472,13 +472,25 @@ app.delete('/api/admin/users/:id', authMiddleware, adminAuthMiddleware, async (r
   }
 });
 
-// 검색 통계 조회
+// 검색 통계 조회 (기본)
 app.get('/api/admin/stats', authMiddleware, adminAuthMiddleware, async (req, res) => {
   try {
     const stats = await db.getSearchStats();
     res.json(stats);
   } catch (error) {
     console.error('통계 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// 상세 통계 조회 (사용자별, 일별, 기간별, API 한도)
+app.get('/api/admin/stats/detailed', authMiddleware, adminAuthMiddleware, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const stats = await db.getDetailedStats(startDate, endDate);
+    res.json(stats);
+  } catch (error) {
+    console.error('상세 통계 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 });

@@ -5,11 +5,12 @@ let searchStats = null;
 let currentFilter = 'all';
 
 const categoryNames = {
-  accounting: '회계기준',
-  tax: '세법',
-  customs: '관세법',
-  trade: '무역법',
-  finance: '금융정보',
+  'accounting-tax': '회계·세무',
+  'trade-customs': '무역·관세',
+  'legal-contract': '법률·계약',
+  'finance-treasury': '금융·재무',
+  'consumer-cs': '소비자·민원',
+  'it-system': 'IT·시스템',
   labor: '노무·인사'
 };
 
@@ -139,6 +140,7 @@ function updateStats() {
 
 async function loadSearchStats() {
   try {
+    // 기본 통계 로드
     const response = await fetch('/api/admin/stats', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -147,8 +149,109 @@ async function loadSearchStats() {
     
     searchStats = await response.json();
     renderSearchStats();
+    
+    // 상세 통계 로드
+    await loadDetailedStats();
   } catch (error) {
     console.error('통계 조회 오류:', error);
+  }
+}
+
+async function loadDetailedStats() {
+  try {
+    const response = await fetch('/api/admin/stats/detailed', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) throw new Error('상세 통계 조회 실패');
+    
+    const detailedStats = await response.json();
+    renderDetailedStats(detailedStats);
+  } catch (error) {
+    console.error('상세 통계 조회 오류:', error);
+  }
+}
+
+function renderDetailedStats(stats) {
+  if (!stats) return;
+  
+  // API 한도 렌더링
+  const apiQuota = stats.apiQuota;
+  
+  document.getElementById('apiUsageText').textContent = `${apiQuota.used.toLocaleString()} / ${apiQuota.freeLimit.toLocaleString()}`;
+  document.getElementById('apiUsageBar').style.width = `${Math.min(apiQuota.usagePercent, 100)}%`;
+  document.getElementById('apiUsagePercent').textContent = `${apiQuota.usagePercent}% 사용`;
+  document.getElementById('apiRemaining').textContent = apiQuota.remaining.toLocaleString();
+  document.getElementById('apiDailyAvg').textContent = stats.summary.dailyAverage.toLocaleString();
+  document.getElementById('apiProjected').textContent = apiQuota.projectedMonthEnd.toLocaleString();
+  
+  // 진행바 색상 변경
+  const progressBar = document.getElementById('apiUsageBar');
+  if (apiQuota.status === 'exceeded') {
+    progressBar.className = 'bg-gradient-to-r from-red-500 to-red-700 h-3 rounded-full transition-all';
+  } else if (apiQuota.status === 'warning') {
+    progressBar.className = 'bg-gradient-to-r from-amber-500 to-orange-600 h-3 rounded-full transition-all';
+  } else {
+    progressBar.className = 'bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all';
+  }
+  
+  // 유료 전환 알림
+  const upgradeAlert = document.getElementById('apiUpgradeAlert');
+  if (apiQuota.upgradePrediction) {
+    upgradeAlert.classList.remove('hidden');
+    document.getElementById('upgradeDate').textContent = apiQuota.upgradePrediction;
+  } else {
+    upgradeAlert.classList.add('hidden');
+  }
+  
+  // 사용자별 Top 5
+  const topUsersDiv = document.getElementById('topUsers');
+  if (stats.byUser.length === 0) {
+    topUsersDiv.innerHTML = '<p class="text-sm text-slate-500">검색 기록이 없습니다.</p>';
+  } else {
+    topUsersDiv.innerHTML = stats.byUser.slice(0, 5).map((user, index) => {
+      const medals = ['🥇', '🥈', '🥉'];
+      const medal = index < 3 ? medals[index] : `${index + 1}위`;
+      
+      return `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <span class="text-sm font-semibold w-8">${medal}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-slate-800 truncate">${user.name}</p>
+              <p class="text-xs text-slate-500 truncate">${user.email}</p>
+            </div>
+          </div>
+          <span class="text-sm font-bold text-indigo-600">${user.searchCount}회</span>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  // 일별 사용량 (최근 7일)
+  const dailyChartDiv = document.getElementById('dailyChart');
+  if (stats.daily.length === 0) {
+    dailyChartDiv.innerHTML = '<p class="text-sm text-slate-500">일별 기록이 없습니다.</p>';
+  } else {
+    const recentDays = stats.daily.slice(0, 7).reverse();
+    const maxDaily = Math.max(...recentDays.map(d => d.count));
+    
+    dailyChartDiv.innerHTML = recentDays.map(day => {
+      const date = new Date(day.date);
+      const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+      const barHeight = maxDaily > 0 ? (day.count / maxDaily * 100) : 0;
+      
+      return `
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-600 w-12">${dateStr}</span>
+          <div class="flex-1 bg-slate-100 rounded-full h-6 relative overflow-hidden">
+            <div class="bg-gradient-to-r from-green-500 to-emerald-600 h-6 rounded-full transition-all flex items-center justify-end pr-2" style="width: ${barHeight}%">
+              <span class="text-xs font-semibold text-white">${day.count}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 }
 
