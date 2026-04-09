@@ -2,6 +2,7 @@
 let token = localStorage.getItem('token');
 let currentUser = null;
 let selectedCategory = null;
+let conversationHistory = []; // 대화 이력 저장
 
 // 카테고리 데이터 (7개 분야)
 const categories = [
@@ -316,9 +317,16 @@ function renderSearchArea() {
         </div>
       </div>
 
-      <button onclick="search()" class="w-full ${colors.btnBg} ${colors.btnHover} text-white py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 font-semibold">
-        <i data-lucide="search" class="w-5 h-5"></i> 검색하기
-      </button>
+      <div class="flex gap-2">
+        <button onclick="search()" class="flex-1 ${colors.btnBg} ${colors.btnHover} text-white py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 font-semibold">
+          <i data-lucide="search" class="w-5 h-5"></i> 검색하기
+        </button>
+        ${conversationHistory.length > 0 ? `
+        <button onclick="resetConversation()" class="bg-slate-500 hover:bg-slate-600 text-white py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 font-medium">
+          <i data-lucide="rotate-ccw" class="w-5 h-5"></i> 대화 초기화
+        </button>
+        ` : ''}
+      </div>
     </div>
   `;
   
@@ -441,23 +449,36 @@ async function search() {
   
   const colors = colorMap[selectedCategory.color];
   
-  resultArea.innerHTML = `
-    <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-      <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-        <div class="flex items-center gap-3">
-          <div class="px-3 py-1 rounded-full text-sm font-medium ${colors.light} ${colors.text}">
-            ${selectedCategory.name}
-          </div>
-          <h2 class="font-semibold text-slate-700">검색 결과</h2>
-        </div>
-      </div>
-      <div class="p-6">
-        <div id="streamingContent" class="prose max-w-none"></div>
-      </div>
-    </div>
-  `;
+  // 대화 이력에 질문 추가
+  const questionItem = {
+    type: 'question',
+    content: query,
+    images: uploadedImages.length > 0 ? [...uploadedImages] : [],
+    timestamp: new Date().toISOString()
+  };
   
-  const contentDiv = document.getElementById('streamingContent');
+  conversationHistory.push(questionItem);
+  
+  // 대화 이력 UI 렌더링
+  renderConversationHistory();
+  
+  // 입력창 초기화 및 스크롤
+  document.getElementById('queryInput').value = '';
+  uploadedImages = [];
+  updateImagePreview();
+  
+  // 답변 스트리밍을 위한 임시 답변 객체 추가
+  const answerItem = {
+    type: 'answer',
+    content: '',
+    timestamp: new Date().toISOString(),
+    streaming: true
+  };
+  
+  conversationHistory.push(answerItem);
+  renderConversationHistory();
+  
+  const answerDiv = document.getElementById('answer-' + (conversationHistory.length - 1));
   let fullText = '';
   
   try {
@@ -470,7 +491,8 @@ async function search() {
       body: JSON.stringify({ 
         query, 
         category: selectedCategory.id,
-        images: uploadedImages.length > 0 ? uploadedImages : undefined
+        images: uploadedImages.length > 0 ? uploadedImages : undefined,
+        conversationHistory: conversationHistory.slice(0, -1) // 현재 추가 중인 답변 제외
       })
     });
     
@@ -489,25 +511,36 @@ async function search() {
           const data = JSON.parse(line.substring(6));
           
           if (data.type === 'status') {
-            contentDiv.innerHTML = `<p class="text-slate-600 italic">${data.message}<span class="typing-cursor">|</span></p>`;
+            answerItem.content = data.message;
+            answerDiv.innerHTML = `<p class="text-slate-600 italic">${data.message}<span class="typing-cursor">|</span></p>`;
           } else if (data.type === 'text') {
             fullText += data.content;
-            contentDiv.innerHTML = marked.parse(fullText) + '<span class="typing-cursor">|</span>';
+            answerItem.content = fullText;
+            answerDiv.innerHTML = `<div class="prose max-w-none">${marked.parse(fullText)}</div><span class="typing-cursor">|</span>`;
           } else if (data.type === 'done') {
-            contentDiv.innerHTML = marked.parse(fullText);
-            addCopyButton();
+            answerItem.content = fullText;
+            answerDiv.innerHTML = `<div class="prose max-w-none">${marked.parse(fullText)}</div>`;
           } else if (data.type === 'error') {
-            contentDiv.innerHTML = `<p class="text-red-600">${data.message}</p>`;
+            answerItem.content = data.message;
+            answerItem.error = true;
+            answerDiv.innerHTML = `<p class="text-red-600">${data.message}</p>`;
           }
         }
       }
     }
     
-    // 검색 완료 후 이미지 초기화
-    uploadedImages = [];
-    updateImagePreview();
+    // 검색 완료 후 대화 이력 업데이트
+    answerItem.content = fullText;
+    answerItem.streaming = false;
+    renderConversationHistory();
+    
+    // 검색 영역 다시 렌더링 (대화 초기화 버튼 표시)
+    renderSearchArea();
   } catch (error) {
-    contentDiv.innerHTML = `<p class="text-red-600">검색 중 오류가 발생했습니다: ${error.message}</p>`;
+    answerItem.content = `오류가 발생했습니다: ${error.message}`;
+    answerItem.streaming = false;
+    answerItem.error = true;
+    renderConversationHistory();
   }
 }
 
@@ -530,4 +563,131 @@ function addCopyButton() {
   
   header.appendChild(copyBtn);
   lucide.createIcons();
+}
+
+// 대화 이력 렌더링
+function renderConversationHistory() {
+  const resultArea = document.getElementById('resultArea');
+  resultArea.classList.remove('hidden');
+  
+  const colors = colorMap[selectedCategory.color];
+  
+  let conversationHTML = `
+    <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div class="flex items-center gap-3">
+          <div class="px-3 py-1 rounded-full text-sm font-medium ${colors.light} ${colors.text}">
+            ${selectedCategory.name}
+          </div>
+          <h2 class="font-semibold text-slate-700">대화 내역 (${Math.floor(conversationHistory.length / 2)}개 질문)</h2>
+        </div>
+      </div>
+      <div class="p-6 space-y-6 max-h-[600px] overflow-y-auto">
+  `;
+  
+  conversationHistory.forEach((item, index) => {
+    if (item.type === 'question') {
+      // 질문 표시
+      conversationHTML += `
+        <div class="flex gap-3">
+          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <i data-lucide="user" class="w-4 h-4 text-indigo-600"></i>
+          </div>
+          <div class="flex-1">
+            <div class="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+              <p class="text-slate-800 whitespace-pre-wrap">${escapeHtml(item.content)}</p>
+              ${item.images && item.images.length > 0 ? `
+                <div class="flex flex-wrap gap-2 mt-3">
+                  ${item.images.map(img => `
+                    <img src="${img.data}" alt="첨부 이미지" class="h-20 rounded border border-slate-200">
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="text-xs text-slate-400 mt-1">${formatTime(item.timestamp)}</div>
+          </div>
+        </div>
+      `;
+    } else if (item.type === 'answer') {
+      // 답변 표시
+      conversationHTML += `
+        <div class="flex gap-3">
+          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+            <i data-lucide="sparkles" class="w-4 h-4 text-white"></i>
+          </div>
+          <div class="flex-1">
+            <div id="answer-${index}" class="bg-slate-50 rounded-xl p-4 border border-slate-200 ${item.error ? 'border-red-300 bg-red-50' : ''}">
+              ${item.streaming ? 
+                `<p class="text-slate-600 italic">${escapeHtml(item.content)}<span class="typing-cursor">|</span></p>` :
+                `<div class="prose max-w-none">${marked.parse(item.content)}</div>`
+              }
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <div class="text-xs text-slate-400">${formatTime(item.timestamp)}</div>
+              ${!item.streaming && !item.error ? `
+                <button onclick="copyAnswer(${index})" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                  <i data-lucide="copy" class="w-3 h-3"></i> 복사
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  });
+  
+  conversationHTML += `
+      </div>
+    </div>
+  `;
+  
+  resultArea.innerHTML = conversationHTML;
+  lucide.createIcons();
+  
+  // 스크롤을 최신 답변으로 이동
+  setTimeout(() => {
+    const lastAnswer = document.querySelector('#resultArea > div > div:last-child');
+    if (lastAnswer) {
+      lastAnswer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, 100);
+}
+
+// HTML 이스케이프
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// 시간 포맷
+function formatTime(timestamp) {
+  const date = new Date(timestamp);
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+// 답변 복사
+function copyAnswer(index) {
+  const item = conversationHistory[index];
+  navigator.clipboard.writeText(item.content);
+  
+  const btn = event.target.closest('button');
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 text-green-600"></i><span class="text-green-600">복사됨</span>';
+  
+  setTimeout(() => {
+    btn.innerHTML = originalHTML;
+    lucide.createIcons();
+  }, 2000);
+}
+
+// 대화 초기화
+function resetConversation() {
+  if (confirm('대화 내역을 모두 삭제하시겠습니까?')) {
+    conversationHistory = [];
+    document.getElementById('resultArea').classList.add('hidden');
+    renderSearchArea();
+  }
 }

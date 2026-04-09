@@ -460,10 +460,10 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 
 app.post('/api/search', authMiddleware, async (req, res) => {
   try {
-    const { query, category, images } = req.body;
+    const { query, category, images, conversationHistory } = req.body;
     const userId = req.user.id;
 
-    console.log(`🔍 검색 요청 - 사용자: ${userId}, 카테고리: ${category}, 질문: ${query}, 이미지: ${images ? images.length : 0}개`);
+    console.log(`🔍 검색 요청 - 사용자: ${userId}, 카테고리: ${category}, 질문: ${query}, 이미지: ${images ? images.length : 0}개, 대화 이력: ${conversationHistory ? conversationHistory.length : 0}개`);
 
     // Gemini API 키 확인
     if (!genAI) {
@@ -509,16 +509,71 @@ app.post('/api/search', authMiddleware, async (req, res) => {
 
       console.log('✅ 모델 초기화 완료 (gemini-3.1-pro-preview)');
 
-      // 콘텐츠 구성 (텍스트 + 이미지)
-      let content = [{ text: `${systemPrompt}\n\n**사용자 질문:**\n${query}` }];
+      // 대화 컨텍스트 구성 (이전 대화 이력 포함)
+      let contents = [];
       
-      // 이미지가 있으면 추가
+      // 시스템 프롬프트는 첫 번째 사용자 메시지에 포함
+      let systemPromptAdded = false;
+      
+      // 대화 이력이 있으면 추가
+      if (conversationHistory && conversationHistory.length > 0) {
+        console.log(`💬 대화 이력 ${conversationHistory.length}개 포함`);
+        
+        conversationHistory.forEach(item => {
+          if (item.type === 'question') {
+            // 질문 메시지
+            let parts = [];
+            
+            // 첫 번째 질문에만 시스템 프롬프트 추가
+            if (!systemPromptAdded) {
+              parts.push({ text: `${systemPrompt}\n\n**사용자 질문:**\n${item.content}` });
+              systemPromptAdded = true;
+            } else {
+              parts.push({ text: item.content });
+            }
+            
+            // 질문에 포함된 이미지 추가
+            if (item.images && item.images.length > 0) {
+              item.images.forEach(img => {
+                const base64Data = img.data.split(',')[1];
+                parts.push({
+                  inlineData: {
+                    mimeType: img.mimeType,
+                    data: base64Data
+                  }
+                });
+              });
+            }
+            
+            contents.push({
+              role: 'user',
+              parts: parts
+            });
+          } else if (item.type === 'answer' && !item.streaming) {
+            // 답변 메시지 (스트리밍 중인 답변은 제외)
+            contents.push({
+              role: 'model',
+              parts: [{ text: item.content }]
+            });
+          }
+        });
+      }
+      
+      // 현재 질문 추가
+      let currentQuestionParts = [];
+      
+      if (!systemPromptAdded) {
+        currentQuestionParts.push({ text: `${systemPrompt}\n\n**사용자 질문:**\n${query}` });
+      } else {
+        currentQuestionParts.push({ text: query });
+      }
+      
+      // 현재 질문에 포함된 이미지 추가
       if (images && images.length > 0) {
-        console.log(`📷 이미지 ${images.length}개 포함`);
-        images.forEach((img, index) => {
-          // Base64 데이터에서 헤더 제거 (data:image/png;base64, 부분)
+        console.log(`📷 현재 질문에 이미지 ${images.length}개 포함`);
+        images.forEach(img => {
           const base64Data = img.data.split(',')[1];
-          content.push({
+          currentQuestionParts.push({
             inlineData: {
               mimeType: img.mimeType,
               data: base64Data
@@ -526,9 +581,20 @@ app.post('/api/search', authMiddleware, async (req, res) => {
           });
         });
       }
+      
+      contents.push({
+        role: 'user',
+        parts: currentQuestionParts
+      });
 
-      // 스트리밍 응답 생성
-      const result = await model.generateContentStream(content);
+      console.log(`📤 총 ${contents.length}개 메시지 전송 (대화 컨텍스트 포함)`);
+
+      // 스트리밍 응답 생성 (Chat API 사용)
+      const chat = model.startChat({
+        history: contents.slice(0, -1) // 마지막 메시지를 제외한 이력
+      });
+      
+      const result = await chat.sendMessageStream(contents[contents.length - 1].parts);
 
       // 스트리밍 데이터 처리
       for await (const chunk of result.stream) {
