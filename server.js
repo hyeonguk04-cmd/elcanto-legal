@@ -288,10 +288,10 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 
 app.post('/api/search', authMiddleware, async (req, res) => {
   try {
-    const { query, category } = req.body;
+    const { query, category, images } = req.body;
     const userId = req.user.id;
 
-    console.log(`🔍 검색 요청 - 사용자: ${userId}, 카테고리: ${category}, 질문: ${query}`);
+    console.log(`🔍 검색 요청 - 사용자: ${userId}, 카테고리: ${category}, 질문: ${query}, 이미지: ${images ? images.length : 0}개`);
 
     // Gemini API 키 확인
     if (!genAI) {
@@ -315,8 +315,7 @@ app.post('/api/search', authMiddleware, async (req, res) => {
 
     // 프롬프트 생성
     const systemPrompt = getPrompt(category);
-    const fullPrompt = `${systemPrompt}\n\n**사용자 질문:**\n${query}`;
-
+    
     console.log('📤 Gemini API 요청 시작...');
 
     // 상태 메시지 전송
@@ -338,8 +337,26 @@ app.post('/api/search', authMiddleware, async (req, res) => {
 
       console.log('✅ 모델 초기화 완료 (gemini-3.1-pro-preview)');
 
+      // 콘텐츠 구성 (텍스트 + 이미지)
+      let content = [{ text: `${systemPrompt}\n\n**사용자 질문:**\n${query}` }];
+      
+      // 이미지가 있으면 추가
+      if (images && images.length > 0) {
+        console.log(`📷 이미지 ${images.length}개 포함`);
+        images.forEach((img, index) => {
+          // Base64 데이터에서 헤더 제거 (data:image/png;base64, 부분)
+          const base64Data = img.data.split(',')[1];
+          content.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: base64Data
+            }
+          });
+        });
+      }
+
       // 스트리밍 응답 생성
-      const result = await model.generateContentStream(fullPrompt);
+      const result = await model.generateContentStream(content);
 
       // 스트리밍 데이터 처리
       for await (const chunk of result.stream) {

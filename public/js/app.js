@@ -275,6 +275,9 @@ function selectCategory(categoryId) {
   renderSearchArea();
 }
 
+// 업로드된 이미지 저장
+let uploadedImages = [];
+
 // 검색 영역 렌더링
 function renderSearchArea() {
   const colors = colorMap[selectedCategory.color];
@@ -293,7 +296,20 @@ function renderSearchArea() {
           <span class="w-6 h-6 bg-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
           질문 입력
         </h2>
-        <textarea id="queryInput" placeholder="궁금한 내용을 입력하세요..." class="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none bg-white" rows="2"></textarea>
+        <textarea id="queryInput" placeholder="궁금한 내용을 입력하세요... (Ctrl+V로 이미지 붙여넣기 가능)" class="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none bg-white" rows="2"></textarea>
+        
+        <!-- 이미지 미리보기 영역 -->
+        <div id="imagePreview" class="hidden mt-3 flex flex-wrap gap-2"></div>
+        
+        <!-- 파일 첨부 버튼 -->
+        <div class="flex items-center gap-2 mt-3">
+          <input type="file" id="fileInput" accept="image/*" multiple class="hidden">
+          <button onclick="document.getElementById('fileInput').click()" class="text-xs bg-white hover:bg-slate-100 px-3 py-1.5 rounded-full text-slate-600 border border-slate-200 transition-colors flex items-center gap-1">
+            <i data-lucide="paperclip" class="w-3 h-3"></i> 이미지 첨부
+          </button>
+          <span class="text-xs text-slate-500">또는 Ctrl+V로 붙여넣기</span>
+        </div>
+        
         <div class="flex flex-wrap gap-2 mt-3">
           <span class="text-xs text-slate-500 flex items-center gap-1"><i data-lucide="help-circle" class="w-3 h-3"></i> 예시:</span>
           ${selectedCategory.examples.map(ex => `<button onclick="setQuery('${ex}')" class="text-xs bg-white hover:bg-slate-100 px-3 py-1.5 rounded-full text-slate-600 border border-slate-200 transition-colors">${ex}</button>`).join('')}
@@ -307,10 +323,79 @@ function renderSearchArea() {
   `;
   
   lucide.createIcons();
+  
+  // 파일 선택 이벤트
+  document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+  
+  // 붙여넣기 이벤트
+  document.getElementById('queryInput').addEventListener('paste', handlePaste);
 }
 
 function setQuery(text) {
   document.getElementById('queryInput').value = text;
+}
+
+// 파일 선택 처리
+function handleFileSelect(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(file => {
+    if (file.type.startsWith('image/')) {
+      convertImageToBase64(file);
+    }
+  });
+}
+
+// 붙여넣기 처리
+function handlePaste(event) {
+  const items = event.clipboardData.items;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      event.preventDefault();
+      const file = items[i].getAsFile();
+      convertImageToBase64(file);
+    }
+  }
+}
+
+// 이미지를 Base64로 변환
+function convertImageToBase64(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64Data = e.target.result;
+    uploadedImages.push({
+      name: file.name,
+      data: base64Data,
+      mimeType: file.type
+    });
+    updateImagePreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+// 이미지 미리보기 업데이트
+function updateImagePreview() {
+  const preview = document.getElementById('imagePreview');
+  if (uploadedImages.length === 0) {
+    preview.classList.add('hidden');
+    return;
+  }
+  
+  preview.classList.remove('hidden');
+  preview.innerHTML = uploadedImages.map((img, index) => `
+    <div class="relative group">
+      <img src="${img.data}" class="w-20 h-20 object-cover rounded-lg border-2 border-slate-200" alt="${img.name}">
+      <button onclick="removeImage(${index})" class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+        ✕
+      </button>
+      <div class="text-xs text-slate-500 mt-1 truncate w-20">${img.name}</div>
+    </div>
+  `).join('');
+}
+
+// 이미지 제거
+function removeImage(index) {
+  uploadedImages.splice(index, 1);
+  updateImagePreview();
 }
 
 // 검색 (스트리밍)
@@ -355,7 +440,8 @@ async function search() {
       },
       body: JSON.stringify({ 
         query, 
-        category: selectedCategory.id 
+        category: selectedCategory.id,
+        images: uploadedImages.length > 0 ? uploadedImages : undefined
       })
     });
     
@@ -387,6 +473,10 @@ async function search() {
         }
       }
     }
+    
+    // 검색 완료 후 이미지 초기화
+    uploadedImages = [];
+    updateImagePreview();
   } catch (error) {
     contentDiv.innerHTML = `<p class="text-red-600">검색 중 오류가 발생했습니다: ${error.message}</p>`;
   }
