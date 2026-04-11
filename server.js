@@ -511,6 +511,7 @@ app.post('/api/search', authMiddleware, async (req, res) => {
 
       // 대화 컨텍스트 구성 (이전 대화 이력을 텍스트로 변환)
       let conversationContext = '';
+      let previousImages = []; // 이전 대화의 이미지 저장
       
       // 대화 이력이 있으면 텍스트로 변환
       if (conversationHistory && conversationHistory.length > 0) {
@@ -520,7 +521,15 @@ app.post('/api/search', authMiddleware, async (req, res) => {
         
         conversationHistory.forEach((item, index) => {
           if (item.type === 'question') {
-            conversationContext += `**질문 ${Math.floor(index / 2) + 1}:** ${item.content}\n\n`;
+            conversationContext += `**질문 ${Math.floor(index / 2) + 1}:** ${item.content}`;
+            
+            // 이미지가 있으면 표시 (실제 이미지는 가장 최근 것만 전송)
+            if (item.images && item.images.length > 0) {
+              conversationContext += ` [📎 이미지 ${item.images.length}개 첨부됨]`;
+              // 가장 최근 이미지만 저장 (이전 이미지는 덮어씀)
+              previousImages = item.images;
+            }
+            conversationContext += '\n\n';
           } else if (item.type === 'answer' && !item.streaming && !item.error) {
             conversationContext += `**답변 ${Math.floor(index / 2) + 1}:** ${item.content}\n\n`;
           }
@@ -529,15 +538,28 @@ app.post('/api/search', authMiddleware, async (req, res) => {
         conversationContext += '---\n\n위 대화 내용을 참고하여 다음 질문에 답변해주세요.\n\n';
       }
       
-      // 콘텐츠 구성 (시스템 프롬프트 + 대화 이력 + 현재 질문 + 이미지)
+      // 콘텐츠 구성 (시스템 프롬프트 + 대화 이력 + 현재 질문)
       let content = [{ 
         text: `${systemPrompt}${conversationContext}**현재 사용자 질문:**\n${query}` 
       }];
       
-      // 현재 질문에 포함된 이미지 추가
+      // 이미지 추가 우선순위: 1) 현재 질문 이미지, 2) 이전 대화의 가장 최근 이미지
       if (images && images.length > 0) {
+        // 현재 질문에 이미지가 있으면 현재 이미지만 전송
         console.log(`📷 현재 질문에 이미지 ${images.length}개 포함`);
         images.forEach(img => {
+          const base64Data = img.data.split(',')[1];
+          content.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: base64Data
+            }
+          });
+        });
+      } else if (previousImages.length > 0) {
+        // 현재 질문에 이미지가 없고, 이전 대화에 이미지가 있으면 이전 이미지 전송
+        console.log(`📷 이전 대화의 이미지 ${previousImages.length}개 재사용`);
+        previousImages.forEach(img => {
           const base64Data = img.data.split(',')[1];
           content.push({
             inlineData: {
