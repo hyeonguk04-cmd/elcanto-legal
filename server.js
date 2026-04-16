@@ -454,6 +454,50 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
+// 비밀번호 변경
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    console.log('🔐 비밀번호 변경 요청:', userId);
+
+    // 입력값 검증
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: '현재 비밀번호와 새 비밀번호를 입력해주세요.' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: '새 비밀번호는 최소 6자 이상이어야 합니다.' });
+    }
+
+    // 현재 사용자 조회
+    const user = await db.getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    }
+
+    // 현재 비밀번호 검증
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValidPassword) {
+      console.log('❌ 현재 비밀번호 불일치');
+      return res.status(401).json({ error: '현재 비밀번호가 올바르지 않습니다.' });
+    }
+
+    // 새 비밀번호 해시
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    // 데이터베이스 업데이트
+    await db.updateUserPassword(userId, newPasswordHash);
+
+    console.log('✅ 비밀번호 변경 완료:', userId);
+    res.json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
+  } catch (error) {
+    console.error('❌ 비밀번호 변경 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // ============================================================
 // 검색 API (Gemini Streaming)
 // ============================================================

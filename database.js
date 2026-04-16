@@ -207,6 +207,20 @@ async function createAdminUser(email, password) {
   }
 }
 
+// 비밀번호 업데이트
+async function updateUserPassword(userId, newPasswordHash) {
+  try {
+    await pool.query(
+      `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [newPasswordHash, userId]
+    );
+    console.log('✅ 비밀번호 업데이트 완료:', userId);
+  } catch (error) {
+    console.error('❌ 비밀번호 업데이트 오류:', error);
+    throw error;
+  }
+}
+
 // 검색 로그 저장
 async function logSearch(data) {
   try {
@@ -420,6 +434,7 @@ module.exports = {
   getUserById: findUserById,        // 별칭 추가
   getAllUsers,
   updateUserStatus,
+  updateUserPassword,
   deleteUser,
   createAdminUser,
   logSearch,
