@@ -247,6 +247,89 @@ function logout() {
   location.reload();
 }
 
+// 설정 모달 열기/닫기
+function openSettings() {
+  document.getElementById('settingsModal').classList.remove('hidden');
+  // 폼 초기화
+  document.getElementById('changePasswordForm').reset();
+  document.getElementById('passwordError').classList.add('hidden');
+  document.getElementById('passwordSuccess').classList.add('hidden');
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.add('hidden');
+}
+
+// 비밀번호 변경
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('changePasswordForm');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const currentPassword = document.getElementById('currentPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      
+      const errorDiv = document.getElementById('passwordError');
+      const successDiv = document.getElementById('passwordSuccess');
+      
+      // 오류 메시지 초기화
+      errorDiv.classList.add('hidden');
+      successDiv.classList.add('hidden');
+      
+      // 새 비밀번호 확인
+      if (newPassword !== confirmPassword) {
+        errorDiv.textContent = '새 비밀번호가 일치하지 않습니다.';
+        errorDiv.classList.remove('hidden');
+        return;
+      }
+      
+      if (newPassword.length < 6) {
+        errorDiv.textContent = '새 비밀번호는 최소 6자 이상이어야 합니다.';
+        errorDiv.classList.remove('hidden');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          errorDiv.textContent = data.error || '비밀번호 변경에 실패했습니다.';
+          errorDiv.classList.remove('hidden');
+          return;
+        }
+        
+        // 성공 메시지 표시
+        successDiv.textContent = data.message || '비밀번호가 성공적으로 변경되었습니다.';
+        successDiv.classList.remove('hidden');
+        
+        // 폼 초기화
+        form.reset();
+        
+        // 3초 후 모달 닫기
+        setTimeout(() => {
+          closeSettings();
+        }, 2000);
+        
+      } catch (error) {
+        console.error('비밀번호 변경 오류:', error);
+        errorDiv.textContent = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+        errorDiv.classList.remove('hidden');
+      }
+    });
+  }
+});
+
 // 카테고리 렌더링
 function renderCategories() {
   const container = document.getElementById('categories');
