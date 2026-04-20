@@ -656,13 +656,33 @@ function renderConversationHistory() {
   const colors = colorMap[selectedCategory.color];
   
   let conversationHTML = `
+    <!-- 프린트 전용 헤더 -->
+    <div class="print-header">
+      <h1 class="text-2xl font-bold text-slate-800 mb-2">기업 법령·회계 통합 검색 - 질의응답 기록</h1>
+      <div class="text-sm text-slate-600 space-y-1">
+        <p><strong>사용자:</strong> ${currentUser?.name || '익명'}</p>
+        <p><strong>분야:</strong> ${selectedCategory.name}</p>
+        <p><strong>출력일시:</strong> ${new Date().toLocaleString('ko-KR')}</p>
+        <p><strong>총 질문 수:</strong> ${Math.floor(conversationHistory.length / 2)}개</p>
+      </div>
+    </div>
+    
     <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-      <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 no-print">
         <div class="flex items-center gap-3">
           <div class="px-3 py-1 rounded-full text-sm font-medium ${colors.light} ${colors.text}">
             ${selectedCategory.name}
           </div>
           <h2 class="font-semibold text-slate-700">대화 내역 (${Math.floor(conversationHistory.length / 2)}개 질문)</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="printConversation()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            프린트
+          </button>
+          <button onclick="resetConversation()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg transition-colors">
+            대화 초기화
+          </button>
         </div>
       </div>
       <div class="p-6 space-y-6 max-h-[600px] overflow-y-auto">
@@ -672,13 +692,14 @@ function renderConversationHistory() {
     if (item.type === 'question') {
       // 질문 표시
       conversationHTML += `
-        <div class="flex gap-3">
-          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+        <div class="conversation-item flex gap-3">
+          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center no-print">
             <i data-lucide="user" class="w-4 h-4 text-indigo-600"></i>
           </div>
           <div class="flex-1">
-            <div class="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
-              <p class="text-slate-800 whitespace-pre-wrap">${escapeHtml(item.content)}</p>
+            <div class="question-bubble bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+              <strong class="text-indigo-800 text-sm">질문:</strong>
+              <p class="text-slate-800 whitespace-pre-wrap mt-1">${escapeHtml(item.content)}</p>
               ${item.images && item.images.length > 0 ? `
                 <div class="flex flex-wrap gap-2 mt-3">
                   ${item.images.map(img => `
@@ -687,25 +708,26 @@ function renderConversationHistory() {
                 </div>
               ` : ''}
             </div>
-            <div class="text-xs text-slate-400 mt-1">${formatTime(item.timestamp)}</div>
+            <div class="text-xs text-slate-400 mt-1 no-print">${formatTime(item.timestamp)}</div>
           </div>
         </div>
       `;
     } else if (item.type === 'answer') {
       // 답변 표시
       conversationHTML += `
-        <div class="flex gap-3">
-          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+        <div class="conversation-item flex gap-3">
+          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center no-print">
             <i data-lucide="sparkles" class="w-4 h-4 text-white"></i>
           </div>
           <div class="flex-1">
-            <div id="answer-${index}" class="bg-slate-50 rounded-xl p-4 border border-slate-200 ${item.error ? 'border-red-300 bg-red-50' : ''}">
+            <div id="answer-${index}" class="answer-bubble bg-slate-50 rounded-xl p-4 border border-slate-200 ${item.error ? 'border-red-300 bg-red-50' : ''}">
+              <strong class="text-indigo-800 text-sm">답변:</strong>
               ${item.streaming ? 
-                `<p class="text-slate-600 italic">${escapeHtml(item.content)}<span class="typing-cursor">|</span></p>` :
-                `<div class="prose max-w-none">${marked.parse(item.content)}</div>`
+                `<p class="text-slate-600 italic mt-1">${escapeHtml(item.content)}<span class="typing-cursor">|</span></p>` :
+                `<div class="prose max-w-none mt-1">${marked.parse(item.content)}</div>`
               }
             </div>
-            <div class="flex items-center gap-2 mt-1">
+            <div class="flex items-center gap-2 mt-1 no-print">
               <div class="text-xs text-slate-400">${formatTime(item.timestamp)}</div>
               ${!item.streaming && !item.error ? `
                 <button onclick="copyAnswer(${index})" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
@@ -749,6 +771,17 @@ function formatTime(timestamp) {
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+// 프린트
+function printConversation() {
+  if (conversationHistory.length === 0) {
+    alert('프린트할 대화 내역이 없습니다.');
+    return;
+  }
+  
+  // 프린트 미리보기 실행
+  window.print();
 }
 
 // 답변 복사
