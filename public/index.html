@@ -43,6 +43,22 @@
         margin-bottom: 2rem;
       }
       
+      /* 프린트 시 높이 제한 해제 */
+      .max-h-\[600px\] {
+        max-height: none !important;
+      }
+      
+      /* 프린트 시 스크롤 해제 */
+      .overflow-y-auto {
+        overflow: visible !important;
+      }
+      
+      /* 대화 이력 컨테이너 */
+      .conversation-container {
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      
       /* 대화 이력 스타일 */
       .conversation-item {
         page-break-inside: avoid;

@@ -685,7 +685,7 @@ function renderConversationHistory() {
           </button>
         </div>
       </div>
-      <div class="p-6 space-y-6 max-h-[600px] overflow-y-auto">
+      <div class="p-6 space-y-6 max-h-[600px] overflow-y-auto conversation-container">
   `;
   
   conversationHistory.forEach((item, index) => {
